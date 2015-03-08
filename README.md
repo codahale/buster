@@ -8,3 +8,5 @@ Buster's a Go library which provides a re-usable framework for
 load-testing things.
 
 Sometimes you just wanna break stuff.
+
+![Buster](http://media.giphy.com/media/ibr51CHOw6QZq/giphy.gif)
