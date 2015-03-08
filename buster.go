@@ -106,7 +106,9 @@ func (b Bench) Run(concurrency int, job Job) Result {
 	return result
 }
 
-// AutoRun runs the given job, starting at
+// AutoRun runs the given job, starting at the step's initial concurrency level
+// and proceeding until the step returns a negative concurrency level. Returns
+// the results for each run at each concurrency level.
 func (b Bench) AutoRun(step Step, job Job) []Result {
 	var results []Result
 
