@@ -57,7 +57,7 @@ type Bench struct {
 
 // Run runs the given job at the given concurrency level, returning a set of
 // results with aggregated latency and throughput measurements.
-func (b Bench) Run(job Job, concurrency int) Result {
+func (b Bench) Run(concurrency int, job Job) Result {
 	var started, finished sync.WaitGroup
 	started.Add(1)
 	finished.Add(concurrency)
@@ -107,12 +107,12 @@ func (b Bench) Run(job Job, concurrency int) Result {
 }
 
 // AutoRun runs the given job, starting at
-func (b Bench) AutoRun(job Job, step Step) []Result {
+func (b Bench) AutoRun(step Step, job Job) []Result {
 	var results []Result
 
 	concurrency := step(nil)
 	for concurrency > 0 {
-		result := b.Run(job, concurrency)
+		result := b.Run(concurrency, job)
 		results = append(results, result)
 
 		concurrency = step(&result)

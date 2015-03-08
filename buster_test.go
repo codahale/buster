@@ -15,29 +15,39 @@ import (
 )
 
 func Example() {
-	// 1, 10, 20 ... 90, 100
-	step := buster.Log(buster.FixedStep(1, 100, 10))
-
+	// run a bench for 10s, tracking latencies from 1µs to 1 minute
 	bench := buster.Bench{
 		Duration:   10 * time.Second,
 		MinLatency: 1 * time.Microsecond,
 		MaxLatency: 1 * time.Minute,
 	}
 
-	result := bench.AutoRun(func(id int, gen *buster.Generator) error {
-		client := &http.Client{}
+	// run an automatic bench, using the previous step
+	result := bench.AutoRun(
+		// 1, 10, 20 ... 90, 100, and log on the way there
+		buster.Log(buster.FixedStep(1, 100, 10)),
 
-		return gen.Do(func() error {
-			resp, err := client.Get("http://www.google.com/")
-			if err != nil {
-				return err
-			}
-			io.Copy(ioutil.Discard, resp.Body)
-			return resp.Body.Close()
-		})
-	}, buster.Log(step))
+		// the job to be run
+		func(id int, gen *buster.Generator) error {
+			client := &http.Client{}
+
+			return gen.Do(func() error {
+				// perform a GET request
+				resp, err := client.Get("http://www.google.com/")
+				if err != nil {
+					return err
+				}
+
+				// read the body
+				io.Copy(ioutil.Discard, resp.Body)
+				return resp.Body.Close()
+			})
+		},
+	)
 
 	for _, r := range result {
+		fmt.Printf("%d successful requests, %d failed requests", r.Success, r.Failure)
+
 		for _, b := range r.Latency.CumulativeDistribution() {
 			fmt.Printf(
 				"p%f @ %d threads: %fms\n",
@@ -118,11 +128,11 @@ func TestBenchRun(t *testing.T) {
 		MaxLatency: 1 * time.Second,
 	}
 
-	r := bench.Run(func(id int, gen *buster.Generator) error {
+	r := bench.Run(10, func(id int, gen *buster.Generator) error {
 		return gen.Do(func() error {
 			return nil
 		})
-	}, 10)
+	})
 
 	if v, want := r.Concurrency, 10; v != want {
 		t.Errorf("Concurrency was %d, but expected %d", v, want)
@@ -136,11 +146,11 @@ func TestBenchRunFailures(t *testing.T) {
 		MaxLatency: 1 * time.Second,
 	}
 
-	r := bench.Run(func(id int, gen *buster.Generator) error {
+	r := bench.Run(10, func(id int, gen *buster.Generator) error {
 		return gen.Do(func() error {
 			return errors.New("woo hoo")
 		})
-	}, 10)
+	})
 
 	if r.Failure == 0 {
 		t.Errorf("Failure count was 0, but expected %d", r.Failure)
@@ -154,9 +164,9 @@ func TestBenchRunErrors(t *testing.T) {
 		MaxLatency: 1 * time.Second,
 	}
 
-	r := bench.Run(func(id int, gen *buster.Generator) error {
+	r := bench.Run(10, func(id int, gen *buster.Generator) error {
 		return errors.New("woo hoo")
-	}, 10)
+	})
 
 	if v, want := len(r.Errors), 10; v != want {
 		t.Fatalf("Error count was %d, but expected %d", v, want)
@@ -170,11 +180,14 @@ func TestBenchAutoRun(t *testing.T) {
 		MaxLatency: 1 * time.Second,
 	}
 
-	results := bench.AutoRun(func(id int, gen *buster.Generator) error {
-		return gen.Do(func() error {
-			return nil
-		})
-	}, buster.FixedStep(1, 100, 10))
+	results := bench.AutoRun(
+		buster.FixedStep(1, 100, 10),
+		func(id int, gen *buster.Generator) error {
+			return gen.Do(func() error {
+				return nil
+			})
+		},
+	)
 
 	if v, want := len(results), 11; v != want {
 		t.Fatalf("Result size was %d, but expected %d", v, want)
@@ -188,11 +201,14 @@ func TestBenchAutoRunFailures(t *testing.T) {
 		MaxLatency: 1 * time.Second,
 	}
 
-	results := bench.AutoRun(func(id int, gen *buster.Generator) error {
-		return gen.Do(func() error {
-			return errors.New("woo hoo")
-		})
-	}, buster.FixedStep(1, 100, 10))
+	results := bench.AutoRun(
+		buster.FixedStep(1, 100, 10),
+		func(id int, gen *buster.Generator) error {
+			return gen.Do(func() error {
+				return errors.New("woo hoo")
+			})
+		},
+	)
 
 	if results[0].Failure == 0 {
 		t.Errorf("Failure count was 0, but expected %d", results[0].Failure)
@@ -206,9 +222,12 @@ func TestBenchAutoRunErrors(t *testing.T) {
 		MaxLatency: 1 * time.Second,
 	}
 
-	results := bench.AutoRun(func(id int, gen *buster.Generator) error {
-		return errors.New("woo hoo")
-	}, buster.FixedStep(1, 100, 10))
+	results := bench.AutoRun(
+		buster.FixedStep(1, 100, 10),
+		func(id int, gen *buster.Generator) error {
+			return errors.New("woo hoo")
+		},
+	)
 
 	if v, want := len(results[0].Errors), 1; v != want {
 		t.Fatalf("Error count was %d, but expected %d", v, want)
