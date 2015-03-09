@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/codahale/hdrhistogram"
+	"github.com/codahale/usl"
 )
 
 // A Generator is a type passed to Job instances to manage load generation.
@@ -176,6 +177,18 @@ func FixedStep(min, max, step int) Step {
 		}
 		return (r.Concurrency/step)*step + step
 	}
+}
+
+// Model builds a Universal Scalability Law model based on the given results.
+func Model(results []Result) (usl.Model, error) {
+	measurements := make([]usl.Measurement, 0, len(results))
+	for _, r := range results {
+		measurements = append(measurements, usl.Measurement{
+			X: float64(r.Concurrency),
+			Y: float64(r.Success) / r.Elapsed.Seconds(),
+		})
+	}
+	return usl.Build(measurements)
 }
 
 func us(d time.Duration) int64 {

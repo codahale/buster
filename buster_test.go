@@ -233,3 +233,45 @@ func TestBenchAutoRunErrors(t *testing.T) {
 		t.Fatalf("Error count was %d, but expected %d", v, want)
 	}
 }
+
+func TestModel(t *testing.T) {
+	results := []buster.Result{
+		{
+			Concurrency: 1,
+			Elapsed:     1 * time.Second,
+			Success:     100,
+		},
+		{
+			Concurrency: 2,
+			Elapsed:     1 * time.Second,
+			Success:     200,
+		},
+		{
+			Concurrency: 3,
+			Elapsed:     1 * time.Second,
+			Success:     300,
+		},
+		{
+			Concurrency: 4,
+			Elapsed:     1 * time.Second,
+			Success:     400,
+		},
+		{
+			Concurrency: 5,
+			Elapsed:     1 * time.Second,
+			Success:     400,
+		},
+		{
+			Concurrency: 6,
+			Elapsed:     1 * time.Second,
+			Success:     300,
+		},
+	}
+
+	model, err := buster.Model(results)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(model)
+}
