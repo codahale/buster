@@ -1,4 +1,15 @@
 // Package buster provides a generic framework for load testing.
+//
+// Specifically, Buster allows you to run a set of independent jobs either at a
+// specific concurrency level or at a number of concurrency levels (e.g., from 1
+// to 100 goroutines, increasing by 10 each) while monitoring throughput and
+// latency.
+//
+// The generic nature of Buster makes it suitable for load testing many
+// different systems—HTTP servers, databases, RPC services, etc. It also has
+// built-in support for modeling using the Universal Scalability Law, which
+// allows you to determine the maximum throughput of a system without testing it
+// to overload.
 package buster
 
 import (
