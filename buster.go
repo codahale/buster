@@ -13,12 +13,45 @@
 package buster
 
 import (
+	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/codahale/hdrhistogram"
-	"github.com/codahale/usl"
 )
+
+// A Generator is a type passed to Job instances to manage load generation.
+type Generator struct {
+	hist             *hdrhistogram.Histogram
+	success, failure *uint64
+	duration, period time.Duration
+}
+
+// Do generates load using the given function.
+func (gen *Generator) Do(f func() error) error {
+	ticker := time.NewTicker(gen.period)
+	defer ticker.Stop()
+
+	timeout := time.After(gen.duration)
+
+	for {
+		select {
+		case start := <-ticker.C:
+			if err := f(); err != nil {
+				atomic.AddUint64(gen.failure, 1)
+				continue
+			}
+			elapsed := us(time.Now().Sub(start))
+			if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.duration)); err != nil {
+				log.Println(err)
+			}
+			atomic.AddUint64(gen.success, 1)
+		case <-timeout:
+			return nil
+		}
+	}
+}
 
 // A Result is returned after a number of concurrent jobs are run.
 type Result struct {
@@ -30,17 +63,17 @@ type Result struct {
 }
 
 // A Job is an arbitrary task.
-type Job func(id int, generator Generator) error
+type Job func(id int, generator *Generator) error
 
 // A Bench is place where jobs are done.
 type Bench struct {
-	Generator              GeneratorType
-	MinLatency, MaxLatency time.Duration
+	Duration, MinLatency, MaxLatency time.Duration
 }
 
-// Run runs the given job at the given concurrency level, returning a set of
-// results with aggregated latency and throughput measurements.
-func (b Bench) Run(concurrency int, job Job) Result {
+// Run runs the given job at the given concurrency level, at the given rate,
+// returning a set of results with aggregated latency and throughput
+// measurements.
+func (b Bench) Run(concurrency, rate int, job Job) Result {
 	var started, finished sync.WaitGroup
 	started.Add(1)
 	finished.Add(concurrency)
@@ -52,21 +85,24 @@ func (b Bench) Run(concurrency int, job Job) Result {
 	timings := make(chan *hdrhistogram.Histogram, concurrency)
 	errors := make(chan error, concurrency)
 
+	workerRate := float64(concurrency) / float64(rate)
+	period := time.Duration((workerRate)*1000000) * time.Microsecond
+
 	for i := 0; i < concurrency; i++ {
 		go func(id int) {
 			defer finished.Done()
 
-			r := reporter{
-				hist:    hdrhistogram.New(us(b.MinLatency), us(b.MaxLatency), 5),
-				success: &result.Success,
-				failure: &result.Failure,
+			gen := &Generator{
+				hist:     hdrhistogram.New(us(b.MinLatency), us(b.MaxLatency), 5),
+				success:  &result.Success,
+				failure:  &result.Failure,
+				period:   period,
+				duration: b.Duration,
 			}
-
-			gen := b.Generator(r)
 
 			started.Wait()
 			errors <- job(id, gen)
-			timings <- r.hist
+			timings <- gen.hist
 		}(i)
 	}
 
@@ -88,39 +124,6 @@ func (b Bench) Run(concurrency int, job Job) Result {
 	}
 
 	return result
-}
-
-// AutoRun runs the given job, starting at the step's initial concurrency level
-// and proceeding until the step returns a negative concurrency level. Returns
-// the results for each run at each concurrency level.
-func (b Bench) AutoRun(step Step, job Job) []Result {
-	var results []Result
-
-	concurrency := step(nil)
-	for concurrency > 0 {
-		result := b.Run(concurrency, job)
-		results = append(results, result)
-
-		concurrency = step(&result)
-
-		if len(result.Errors) > 0 {
-			break
-		}
-	}
-
-	return results
-}
-
-// Model builds a Universal Scalability Law model based on the given results.
-func Model(results []Result) (usl.Model, error) {
-	measurements := make([]usl.Measurement, 0, len(results))
-	for _, r := range results {
-		measurements = append(measurements, usl.Measurement{
-			X: float64(r.Concurrency),
-			Y: float64(r.Success) / r.Elapsed.Seconds(),
-		})
-	}
-	return usl.Build(measurements)
 }
 
 func us(d time.Duration) int64 {
