@@ -43,7 +43,7 @@ func (gen *Generator) Do(f func() error) error {
 				continue
 			}
 			elapsed := us(time.Now().Sub(start))
-			if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.duration)); err != nil {
+			if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.period)); err != nil {
 				log.Println(err)
 			}
 			atomic.AddUint64(gen.success, 1)
