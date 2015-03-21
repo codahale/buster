@@ -106,10 +106,9 @@ func (b Bench) Run(concurrency, rate int, job Job) Result {
 		}(i)
 	}
 
-	start := time.Now()
 	started.Done()
 	finished.Wait()
-	result.Elapsed = time.Now().Sub(start)
+	result.Elapsed = b.Duration
 
 	close(timings)
 	for v := range timings {
