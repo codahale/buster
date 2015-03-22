@@ -13,6 +13,8 @@
 package buster
 
 import (
+	"bytes"
+	"fmt"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -60,6 +62,22 @@ type Result struct {
 	Success, Failure uint64
 	Latency          *hdrhistogram.Histogram
 	Errors           []error
+}
+
+func (r Result) String() string {
+	out := bytes.NewBuffer(nil)
+
+	fmt.Fprintf(out,
+		"%d successes, %d failures, %d errors, %f ops/sec\n",
+		r.Success, r.Failure, len(r.Errors),
+		float64(r.Success)/r.Elapsed.Seconds(),
+	)
+
+	for _, b := range r.Latency.CumulativeDistribution() {
+		fmt.Fprintf(out, "p%f = %fms\n", b.Quantile, float64(b.ValueAt)/10000)
+	}
+
+	return out.String()
 }
 
 // A Job is an arbitrary task.
