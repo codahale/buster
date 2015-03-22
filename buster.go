@@ -20,9 +20,9 @@ import (
 
 // A Generator is a type passed to Job instances to manage load generation.
 type Generator struct {
-	hist             *hdrhistogram.Histogram
-	success, failure *uint64
-	duration, period time.Duration
+	hist                     *hdrhistogram.Histogram
+	success, failure         *uint64
+	warmup, duration, period time.Duration
 }
 
 // Do generates load using the given function.
@@ -30,20 +30,25 @@ func (gen *Generator) Do(f func() error) error {
 	ticker := time.NewTicker(gen.period)
 	defer ticker.Stop()
 
-	timeout := time.After(gen.duration)
+	timeout := time.After(gen.duration + gen.warmup)
+	warmed := time.Now().Add(gen.warmup)
 
 	for {
 		select {
 		case start := <-ticker.C:
 			if err := f(); err != nil {
-				atomic.AddUint64(gen.failure, 1)
+				if start.After(warmed) {
+					atomic.AddUint64(gen.failure, 1)
+				}
 				continue
 			}
-			elapsed := us(time.Now().Sub(start))
-			if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.period)); err != nil {
-				log.Println(err)
+			if start.After(warmed) {
+				elapsed := us(time.Now().Sub(start))
+				if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.period)); err != nil {
+					log.Println(err)
+				}
+				atomic.AddUint64(gen.success, 1)
 			}
-			atomic.AddUint64(gen.success, 1)
 		case <-timeout:
 			return nil
 		}
@@ -80,7 +85,7 @@ type Job func(id int, generator *Generator) error
 
 // A Bench is place where jobs are done.
 type Bench struct {
-	Duration, MinLatency, MaxLatency time.Duration
+	Warmup, Duration, MinLatency, MaxLatency time.Duration
 }
 
 // Run runs the given job at the given concurrency level, at the given rate,
@@ -111,6 +116,7 @@ func (b Bench) Run(concurrency, rate int, job Job) Result {
 				failure:  &result.Failure,
 				period:   period,
 				duration: b.Duration,
+				warmup:   b.Warmup,
 			}
 
 			started.Wait()
