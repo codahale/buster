@@ -40,17 +40,7 @@ func Example() {
 		},
 	)
 
-	fmt.Printf("%d successful requests, %d failed requests", r.Success, r.Failure)
-
-	for _, b := range r.Latency.CumulativeDistribution() {
-		fmt.Printf(
-			"p%f @ %d threads: %fms\n",
-			b.Quantile,
-			r.Concurrency,
-			float64(b.ValueAt)/1000,
-		)
-	}
-
+	fmt.Println(r)
 }
 
 func TestBenchRun(t *testing.T) {
