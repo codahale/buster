@@ -36,18 +36,19 @@ func (gen *Generator) Do(f func() error) error {
 	for {
 		select {
 		case start := <-ticker.C:
-			if err := f(); err != nil {
-				if start.After(warmed) {
+			err := f()
+			if start.After(warmed) {
+				if err == nil {
+					// record success
+					elapsed := us(time.Now().Sub(start))
+					if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.period)); err != nil {
+						log.Println(err)
+					}
+					atomic.AddUint64(gen.success, 1)
+				} else {
+					// record failure
 					atomic.AddUint64(gen.failure, 1)
 				}
-				continue
-			}
-			if start.After(warmed) {
-				elapsed := us(time.Now().Sub(start))
-				if err := gen.hist.RecordCorrectedValue(elapsed, us(gen.period)); err != nil {
-					log.Println(err)
-				}
-				atomic.AddUint64(gen.success, 1)
 			}
 		case <-timeout:
 			return nil
