@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codahale/buster"
+	"github.com/picmonkey/buster"
 )
 
 func Example() {
