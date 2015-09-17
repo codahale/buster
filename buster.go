@@ -93,6 +93,13 @@ type Bench struct {
 // returning a set of results with aggregated latency and throughput
 // measurements.
 func (b Bench) Run(concurrency, rate int, job Job) Result {
+	return b.Runf(concurrency, float64(rate), job)
+}
+
+// Runf runs the given job at the given concurrency level, at the given rate,
+// returning a set of results with aggregated latency and throughput
+// measurements.
+func (b Bench) Runf(concurrency int, rate float64, job Job) Result {
 	var started, finished sync.WaitGroup
 	started.Add(1)
 	finished.Add(concurrency)
@@ -104,7 +111,7 @@ func (b Bench) Run(concurrency, rate int, job Job) Result {
 	timings := make(chan *hdrhistogram.Histogram, concurrency)
 	errors := make(chan error, concurrency)
 
-	workerRate := float64(concurrency) / float64(rate)
+	workerRate := float64(concurrency) / rate
 	period := time.Duration((workerRate)*1000000) * time.Microsecond
 
 	for i := 0; i < concurrency; i++ {
